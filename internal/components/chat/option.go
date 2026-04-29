@@ -10,3 +10,17 @@ type Options struct {
 type Option struct {
 	apply func(opts *Options)
 }
+
+func GetOptions(base *Options, opts ...Option) *Options {
+	if base == nil {
+		return &Options{}
+	}
+
+	for _, opt := range opts {
+		if opt.apply != nil {
+			opt.apply(base)
+		}
+	}
+
+	return base
+}

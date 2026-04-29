@@ -7,5 +7,5 @@ import (
 )
 
 type BaseChatModel interface {
-	Generate(ctx context.Context, input []*schema.Message, opts ...Option) (schema.Message, error)
+	Generate(ctx context.Context, input []*schema.Message, opts ...Option) (*schema.Message, error)
 }

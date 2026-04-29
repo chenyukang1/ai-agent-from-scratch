@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/chenyukang1/ai-agent-from-scratch/internal/components/chat"
@@ -34,9 +35,25 @@ type ChatModelConfig struct {
 }
 
 type ChatModel struct {
-	client Client
+	client *Client
 }
 
-func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, opts ...chat.Option) (schema.Message, error) {
-	return schema.Message{}, nil
+func NewChatModel(conf *ChatModelConfig) *ChatModel {
+	client := NewClient(&ClientConfig{
+		APIKey:              conf.APIKey,
+		Timeout:             conf.Timeout,
+		Model:               conf.Model,
+		MaxCompletionTokens: conf.MaxCompletionTokens,
+		Temperature:         conf.Temperature,
+	})
+	return &ChatModel{client: client}
+}
+
+func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, opts ...chat.Option) (*schema.Message, error) {
+	output, err := cm.client.Generate(ctx, input, opts...)
+	if err != nil {
+		return nil, err
+	}
+	log.Fatal(output)
+	return nil, nil
 }
