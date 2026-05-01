@@ -24,14 +24,20 @@ type ChatModelConfig struct {
 	// Required
 	Model string `json:"model"`
 
+	// MaxTokens limits the maximum number of tokens that can be generated in the chat completion
+	// Optional. Default: model's maximum
+	// Deprecated: use MaxCompletionTokens. Not compatible with o1-series models.
+	// refs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-max_tokens
+	MaxTokens int `json:"max_tokens,omitempty"`
+
 	// MaxCompletionTokens specifies an upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens.
-	MaxCompletionTokens *int `json:"max_completion_tokens,omitempty"`
+	MaxCompletionTokens int `json:"max_completion_tokens,omitempty"`
 
 	// Temperature specifies what sampling temperature to use
 	// Generally recommend altering this or TopP but not both.
 	// Range: 0.0 to 2.0. Higher values make output more random
 	// Optional. Default: 1.0
-	Temperature *float32 `json:"temperature,omitempty"`
+	Temperature float32 `json:"temperature,omitempty"`
 }
 
 type ChatModel struct {

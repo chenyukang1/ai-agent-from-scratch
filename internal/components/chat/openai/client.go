@@ -3,7 +3,7 @@ package openai
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"time"
 
 	"github.com/chenyukang1/ai-agent-from-scratch/internal/components/chat"
@@ -11,8 +11,12 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
+type chatCompletionCreator interface {
+	CreateChatCompletion(ctx context.Context, req openai.ChatCompletionRequest) (openai.ChatCompletionResponse, error)
+}
+
 type Client struct {
-	cli    *openai.Client
+	cli    chatCompletionCreator
 	config *ClientConfig
 }
 
@@ -31,14 +35,20 @@ type ClientConfig struct {
 	// Required
 	Model string `json:"model"`
 
+	// MaxTokens limits the maximum number of tokens that can be generated in the chat completion
+	// Optional. Default: model's maximum
+	// Deprecated: use MaxCompletionTokens. Not compatible with o1-series models.
+	// refs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-max_tokens
+	MaxTokens int `json:"max_tokens,omitempty"`
+
 	// MaxCompletionTokens specifies an upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens.
-	MaxCompletionTokens *int `json:"max_completion_tokens,omitempty"`
+	MaxCompletionTokens int `json:"max_completion_tokens,omitempty"`
 
 	// Temperature specifies what sampling temperature to use
 	// Generally recommend altering this or TopP but not both.
 	// Range: 0.0 to 2.0. Higher values make output more random
 	// Optional. Default: 1.0
-	Temperature *float32 `json:"temperature,omitempty"`
+	Temperature float32 `json:"temperature,omitempty"`
 }
 
 func NewClient(conf *ClientConfig) *Client {
@@ -51,46 +61,84 @@ func NewClient(conf *ClientConfig) *Client {
 }
 
 func (c *Client) Generate(ctx context.Context, input []*schema.Message, opts ...chat.Option) (*schema.Message, error) {
-	return nil, nil
+	req, err := c.genRequest(ctx, input, opts...)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.cli.CreateChatCompletion(ctx, *req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chat completion: %v", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("no choices returned from openai API response")
+	}
+
+	message := resp.Choices[0].Message
+	outMessage := &schema.Message{
+		Role:    toSchemaRole(message.Role),
+		Content: message.Content,
+	}
+	if len(message.ReasoningContent) > 0 {
+		outMessage.ReasoningContent = message.ReasoningContent
+	}
+
+	return outMessage, nil
 }
 
-func (c *Client) genRequest(ctx context.Context, input []*schema.Message, opts ...chat.Option) {
+func (c *Client) genRequest(ctx context.Context, input []*schema.Message, opts ...chat.Option) (*openai.ChatCompletionRequest, error) {
 	options := chat.GetOptions(&chat.Options{
-		Temperature: c.config.Temperature,
-		Model:       &c.config.Model,
+		Temperature:         c.config.Temperature,
+		MaxTokens:           c.config.MaxTokens,
+		MaxCompletionTokens: c.config.MaxCompletionTokens,
+		Model:               c.config.Model,
 	}, opts...)
 	req := &openai.ChatCompletionRequest{
-		Model:                           *options.Model,
-		MaxTokens:                       *c.config.MaxCompletionTokens,
-		MaxCompletionTokens:             0,
-		Temperature:                     0,
-		TopP:                            0,
-		N:                               0,
-		Stream:                          false,
-		Stop:                            []string{},
-		PresencePenalty:                 0,
-		ResponseFormat:                  &openai.ChatCompletionResponseFormat{},
-		Seed:                            new(int),
-		FrequencyPenalty:                0,
-		LogitBias:                       map[string]int{},
-		LogProbs:                        false,
-		TopLogProbs:                     0,
-		User:                            "",
-		Functions:                       []openai.FunctionDefinition{},
-		FunctionCall:                    c,
-		Tools:                           []openai.Tool{},
-		ToolChoice:                      c,
-		StreamOptions:                   &openai.StreamOptions{},
-		ParallelToolCalls:               c,
-		Store:                           false,
-		ReasoningEffort:                 "",
-		Metadata:                        map[string]string{},
-		Prediction:                      &openai.Prediction{},
-		ChatTemplateKwargs:              map[string]any{},
-		ServiceTier:                     "",
-		Verbosity:                       "",
-		SafetyIdentifier:                "",
-		ChatCompletionRequestExtensions: openai.ChatCompletionRequestExtensions{},
+		Model:               options.Model,
+		MaxTokens:           options.MaxTokens,
+		MaxCompletionTokens: options.MaxCompletionTokens,
+		Temperature:         options.Temperature,
+		Stream:              false,
+		ResponseFormat:      &openai.ChatCompletionResponseFormat{},
 	}
-	log.Fatal(req)
+
+	msgs := make([]openai.ChatCompletionMessage, len(input))
+	for i, msg := range input {
+		msgs[i] = openai.ChatCompletionMessage{
+			Role:    toOpenaiRole(msg.Role),
+			Content: msg.Content,
+		}
+	}
+	req.Messages = msgs
+	return req, nil
+}
+
+func toOpenaiRole(role schema.RoleType) string {
+	switch role {
+	case schema.User:
+		return openai.ChatMessageRoleUser
+	case schema.Assistant:
+		return openai.ChatMessageRoleAssistant
+	case schema.System:
+		return openai.ChatMessageRoleSystem
+	case schema.Tool:
+		return openai.ChatMessageRoleTool
+	default:
+		return string(role)
+	}
+}
+
+func toSchemaRole(s string) schema.RoleType {
+	switch s {
+	case openai.ChatMessageRoleUser:
+		return schema.User
+	case openai.ChatMessageRoleAssistant:
+		return schema.Assistant
+	case openai.ChatMessageRoleSystem:
+		return schema.System
+	case openai.ChatMessageRoleTool:
+		return schema.Tool
+	default:
+		panic(fmt.Sprintf("unimplemented role: %s", s))
+	}
 }

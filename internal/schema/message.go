@@ -19,4 +19,8 @@ type Message struct {
 	Role RoleType `json:"role"`
 	// Content is for user text input and model text output.
 	Content string `json:"content"`
+	// ReasoningContent is the thinking process of the model, which will be included when the model returns reasoning content.
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	// customized information for model implementation
+	Extra map[string]any `json:"extra,omitempty"`
 }
