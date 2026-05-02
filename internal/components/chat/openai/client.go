@@ -11,6 +11,7 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
+// For testing purpose, we can use a fake chat creator to mock the API response.
 type chatCompletionCreator interface {
 	CreateChatCompletion(ctx context.Context, req openai.ChatCompletionRequest) (openai.ChatCompletionResponse, error)
 }
@@ -25,6 +26,12 @@ type ClientConfig struct {
 	// Use OpenAI API key or Azure API key depending on the service
 	// Required
 	APIKey string `json:"api_key"`
+
+	// BseURL is the base URL for API requests
+	// For OpenAI API, use https://api.openai.com/v1
+	// For Azure OpenAI, use the endpoint URL of your Azure OpenAI resource, e.g. https://your-resource-name.openai.azure.com/
+	// Optional. Default: https://api.openai.com/v1
+	BaseURL string `json:"base_url"`
 
 	// Timeout specifies the maximum duration to wait for API responses
 	// If HTTPClient is set, Timeout will not be used.
@@ -53,6 +60,9 @@ type ClientConfig struct {
 
 func NewClient(conf *ClientConfig) *Client {
 	config := openai.DefaultConfig(conf.APIKey)
+	if conf.BaseURL != "" {
+		config.BaseURL = conf.BaseURL
+	}
 	client := openai.NewClientWithConfig(config)
 	return &Client{
 		cli:    client,
