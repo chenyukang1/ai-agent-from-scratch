@@ -4,7 +4,7 @@ package openai
 import (
 	"context"
 	"fmt"
-	"time"
+	"net/http"
 
 	"github.com/chenyukang1/ai-agent-from-scratch/internal/components/chat"
 	"github.com/chenyukang1/ai-agent-from-scratch/internal/schema"
@@ -18,51 +18,22 @@ type chatCompletionCreator interface {
 
 type Client struct {
 	cli    chatCompletionCreator
-	config *ClientConfig
+	config *ChatModelConfig
 }
 
-type ClientConfig struct {
-	// APIKey is your authentication key
-	// Use OpenAI API key or Azure API key depending on the service
-	// Required
-	APIKey string `json:"api_key"`
-
-	// BseURL is the base URL for API requests
-	// For OpenAI API, use https://api.openai.com/v1
-	// For Azure OpenAI, use the endpoint URL of your Azure OpenAI resource, e.g. https://your-resource-name.openai.azure.com/
-	// Optional. Default: https://api.openai.com/v1
-	BaseURL string `json:"base_url"`
-
-	// Timeout specifies the maximum duration to wait for API responses
-	// If HTTPClient is set, Timeout will not be used.
-	// Optional. Default: no timeout
-	Timeout time.Duration `json:"timeout"`
-
-	// Model specifies the ID of the model to use
-	// Required
-	Model string `json:"model"`
-
-	// MaxTokens limits the maximum number of tokens that can be generated in the chat completion
-	// Optional. Default: model's maximum
-	// Deprecated: use MaxCompletionTokens. Not compatible with o1-series models.
-	// refs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-max_tokens
-	MaxTokens int `json:"max_tokens,omitempty"`
-
-	// MaxCompletionTokens specifies an upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens.
-	MaxCompletionTokens int `json:"max_completion_tokens,omitempty"`
-
-	// Temperature specifies what sampling temperature to use
-	// Generally recommend altering this or TopP but not both.
-	// Range: 0.0 to 2.0. Higher values make output more random
-	// Optional. Default: 1.0
-	Temperature float32 `json:"temperature,omitempty"`
-}
-
-func NewClient(conf *ClientConfig) *Client {
+func NewClient(conf *ChatModelConfig) *Client {
 	config := openai.DefaultConfig(conf.APIKey)
+
 	if conf.BaseURL != "" {
 		config.BaseURL = conf.BaseURL
 	}
+
+	if conf.HTTPClient == nil {
+		config.HTTPClient = http.DefaultClient
+	} else {
+		config.HTTPClient = conf.HTTPClient
+	}
+
 	client := openai.NewClientWithConfig(config)
 	return &Client{
 		cli:    client,
@@ -108,8 +79,6 @@ func (c *Client) genRequest(ctx context.Context, input []*schema.Message, opts .
 		MaxTokens:           options.MaxTokens,
 		MaxCompletionTokens: options.MaxCompletionTokens,
 		Temperature:         options.Temperature,
-		Stream:              false,
-		ResponseFormat:      &openai.ChatCompletionResponseFormat{},
 	}
 
 	msgs := make([]openai.ChatCompletionMessage, len(input))

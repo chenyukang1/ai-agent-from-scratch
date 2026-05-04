@@ -3,13 +3,17 @@ package openai
 import (
 	"context"
 	"errors"
+	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/joho/godotenv"
+	"github.com/sashabaranov/go-openai"
+
 	"github.com/chenyukang1/ai-agent-from-scratch/internal/components/chat"
 	"github.com/chenyukang1/ai-agent-from-scratch/internal/schema"
-	"github.com/sashabaranov/go-openai"
 )
 
 type fakeChatCreator struct {
@@ -24,7 +28,7 @@ func (f *fakeChatCreator) CreateChatCompletion(ctx context.Context, req openai.C
 }
 
 func TestClientGenerateWithWrongAPIKey(t *testing.T) {
-	client := NewClient(&ClientConfig{
+	client := NewClient(&ChatModelConfig{
 		APIKey:    "test-api-key",
 		Timeout:   3 * time.Second,
 		Model:     "test-model",
@@ -40,7 +44,7 @@ func TestClientGenerateWithWrongAPIKey(t *testing.T) {
 func TestGenRequestWithDefaultConfig(t *testing.T) {
 	client := &Client{
 		cli: nil,
-		config: &ClientConfig{
+		config: &ChatModelConfig{
 			Model:               "test-model",
 			MaxTokens:           100,
 			MaxCompletionTokens: 50,
@@ -78,7 +82,7 @@ func TestGenRequestWithDefaultConfig(t *testing.T) {
 func TestGenRequestWithOverrideOptions(t *testing.T) {
 	client := &Client{
 		cli: nil,
-		config: &ClientConfig{
+		config: &ChatModelConfig{
 			Model:               "base-model",
 			MaxTokens:           100,
 			MaxCompletionTokens: 50,
@@ -124,7 +128,7 @@ func TestGenerateReturnsFirstChoice(t *testing.T) {
 	}
 	client := &Client{
 		cli: fake,
-		config: &ClientConfig{
+		config: &ChatModelConfig{
 			Model:               "test-model",
 			MaxTokens:           100,
 			MaxCompletionTokens: 50,
@@ -154,7 +158,7 @@ func TestGenerateReturnsErrorWhenAPIError(t *testing.T) {
 	fake := &fakeChatCreator{err: errors.New("api failure")}
 	client := &Client{
 		cli:    fake,
-		config: &ClientConfig{Model: "test-model"},
+		config: &ChatModelConfig{Model: "test-model"},
 	}
 
 	_, err := client.Generate(context.Background(), []*schema.Message{{Role: schema.User, Content: "hi"}})
@@ -176,7 +180,7 @@ func TestGenerateReturnsErrorWhen401Unauthorized(t *testing.T) {
 	}
 	client := &Client{
 		cli:    fake,
-		config: &ClientConfig{Model: "test-model"},
+		config: &ChatModelConfig{Model: "test-model"},
 	}
 
 	_, err := client.Generate(context.Background(), []*schema.Message{{Role: schema.User, Content: "hi"}})
@@ -194,7 +198,7 @@ func TestGenerateReturnsErrorWhenNoChoices(t *testing.T) {
 	fake := &fakeChatCreator{resp: openai.ChatCompletionResponse{Choices: []openai.ChatCompletionChoice{}}}
 	client := &Client{
 		cli:    fake,
-		config: &ClientConfig{Model: "test-model"},
+		config: &ChatModelConfig{Model: "test-model"},
 	}
 
 	_, err := client.Generate(context.Background(), []*schema.Message{{Role: schema.User, Content: "hi"}})
@@ -204,4 +208,62 @@ func TestGenerateReturnsErrorWhenNoChoices(t *testing.T) {
 	if err.Error() != "no choices returned from openai API response" {
 		t.Fatalf("expected no choices error, got %v", err)
 	}
+}
+
+func TestGenerateWithBaseUrl(t *testing.T) {
+	loadEnvFromRoot(t)
+
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	baseURL := os.Getenv("OPENAI_BASE_URL")
+	if apiKey == "" || baseURL == "" {
+		t.Skip("OPENAI_API_KEY or OPENAI_BASE_URL not set, skipping test")
+	}
+
+	client := NewClient(&ChatModelConfig{
+		APIKey:  apiKey,
+		BaseURL: baseURL,
+		Model:   "openai/gpt-4o-mini",
+		HTTPClient: &http.Client{
+			Transport: &headerTransport{
+				rt: http.DefaultTransport,
+			},
+		},
+	})
+	message, err := client.Generate(context.Background(), []*schema.Message{{Role: schema.User, Content: "hello"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	t.Logf("Generated message: %s", message.Content)
+}
+
+type headerTransport struct {
+	rt http.RoundTripper
+}
+
+func (h *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("HTTP-Referer", "https://test.com")
+	req.Header.Set("X-Title", "test")
+	return h.rt.RoundTrip(req)
+}
+
+func loadEnvFromRoot(t *testing.T) {
+	curDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+
+	rootDir := curDir
+	for {
+		if _, err := os.Stat(rootDir + "/.env"); err == nil {
+			err = godotenv.Load(rootDir + "/.env")
+			if err != nil {
+				t.Fatalf("Error loading .env file from root: %v", err)
+			}
+			return
+		}
+		rootDir = rootDir[:strings.LastIndex(rootDir, "/")]
+	}
+}
+
+func TestOpenAi(t *testing.T) {
 }

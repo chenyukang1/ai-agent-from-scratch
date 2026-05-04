@@ -1,12 +1,12 @@
 package chat
 
 type Options struct {
-	// Temperature is the temperature for the model, which controls the randomness of the model.
-	Temperature float32
 	// MaxTokens is the max number of tokens, if reached the max tokens, the model will stop generating, and mostly return an finish reason of "length".
 	MaxTokens int
 	// MaxCompletionTokens specifies an upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens.
 	MaxCompletionTokens int `json:"max_completion_tokens,omitempty"`
+	// Temperature is the temperature for the model, which controls the randomness of the model.
+	Temperature float32
 	// Model is the model name.
 	Model string
 }

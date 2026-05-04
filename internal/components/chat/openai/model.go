@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/chenyukang1/ai-agent-from-scratch/internal/components/chat"
@@ -14,6 +15,11 @@ type ChatModelConfig struct {
 	// Use OpenAI API key or Azure API key depending on the service
 	// Required
 	APIKey string `json:"api_key"`
+
+	// BaseURL is the OpenAI endpoint URL
+	// Format: https://{YOUR_RESOURCE_NAME}.openai.azure.com. YOUR_RESOURCE_NAME is the name of your resource that you have created on Azure.
+	// Required for proxy
+	BaseURL string `json:"base_url"`
 
 	// Timeout specifies the maximum duration to wait for API responses
 	// If HTTPClient is set, Timeout will not be used.
@@ -38,6 +44,10 @@ type ChatModelConfig struct {
 	// Range: 0.0 to 2.0. Higher values make output more random
 	// Optional. Default: 1.0
 	Temperature float32 `json:"temperature,omitempty"`
+
+	// HTTPClient is used to send HTTP requests
+	// Optional. Default: http.DefaultClient
+	HTTPClient *http.Client `json:"-"`
 }
 
 type ChatModel struct {
@@ -45,13 +55,7 @@ type ChatModel struct {
 }
 
 func NewChatModel(conf *ChatModelConfig) *ChatModel {
-	client := NewClient(&ClientConfig{
-		APIKey:              conf.APIKey,
-		Timeout:             conf.Timeout,
-		Model:               conf.Model,
-		MaxCompletionTokens: conf.MaxCompletionTokens,
-		Temperature:         conf.Temperature,
-	})
+	client := NewClient(conf)
 	return &ChatModel{client: client}
 }
 
