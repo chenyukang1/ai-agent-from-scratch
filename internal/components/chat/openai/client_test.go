@@ -36,9 +36,11 @@ func TestClientGenerateWithWrongAPIKey(t *testing.T) {
 	})
 	message, err := client.Generate(context.Background(), []*schema.Message{{Role: schema.User, Content: "hello"}})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Logf("error: %v", err)
 	}
-	t.Logf("Generated message: %s", message.Content)
+	if message != nil {
+		t.Fatalf("unexpected Generated message: %s", message.Content)
+	}
 }
 
 func TestGenRequestWithDefaultConfig(t *testing.T) {
@@ -222,7 +224,7 @@ func TestGenerateWithBaseUrl(t *testing.T) {
 	client := NewClient(&ChatModelConfig{
 		APIKey:  apiKey,
 		BaseURL: baseURL,
-		Model:   "openai/gpt-4o-mini",
+		Model:   "deepseek/deepseek-v4-flash",
 		HTTPClient: &http.Client{
 			Transport: &headerTransport{
 				rt: http.DefaultTransport,
