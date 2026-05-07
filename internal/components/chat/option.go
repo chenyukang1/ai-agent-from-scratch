@@ -1,5 +1,7 @@
 package chat
 
+import "github.com/chenyukang1/ai-agent-from-scratch/internal/schema"
+
 type Options struct {
 	// MaxTokens is the max number of tokens, if reached the max tokens, the model will stop generating, and mostly return an finish reason of "length".
 	MaxTokens int
@@ -9,6 +11,8 @@ type Options struct {
 	Temperature float32
 	// Model is the model name.
 	Model string
+	// Tools are tool definitions passed to the model for function calling.
+	Tools []*schema.ToolInfo
 }
 
 type Option struct {
@@ -17,6 +21,13 @@ type Option struct {
 
 func WithOption(apply func(opts *Options)) Option {
 	return Option{apply: apply}
+}
+
+// WithTools attaches tool definitions to a single Generate call.
+func WithTools(tools []*schema.ToolInfo) Option {
+	return WithOption(func(opts *Options) {
+		opts.Tools = tools
+	})
 }
 
 func GetOptions(base *Options, opts ...Option) *Options {

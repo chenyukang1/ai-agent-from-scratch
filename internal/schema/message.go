@@ -21,6 +21,10 @@ type Message struct {
 	Content string `json:"content"`
 	// ReasoningContent is the thinking process of the model, which will be included when the model returns reasoning content.
 	ReasoningContent string `json:"reasoning_content,omitempty"`
+	// ToolCalls is set on assistant messages when the model requests tool invocations.
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	// ToolCallID links a tool role message to the assistant tool call it responds to.
+	ToolCallID string `json:"tool_call_id,omitempty"`
 	// customized information for model implementation
 	Extra map[string]any `json:"extra,omitempty"`
 }

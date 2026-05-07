@@ -2,7 +2,6 @@ package openai
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"time"
 
@@ -60,10 +59,5 @@ func NewChatModel(conf *ChatModelConfig) *ChatModel {
 }
 
 func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, opts ...chat.Option) (*schema.Message, error) {
-	output, err := cm.client.Generate(ctx, input, opts...)
-	if err != nil {
-		return nil, err
-	}
-	log.Fatal(output)
-	return nil, nil
+	return cm.client.Generate(ctx, input, opts...)
 }

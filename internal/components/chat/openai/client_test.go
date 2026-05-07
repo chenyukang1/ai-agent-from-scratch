@@ -267,5 +267,84 @@ func loadEnvFromRoot(t *testing.T) {
 	}
 }
 
-func TestOpenAi(t *testing.T) {
+func TestGenRequestWithTools(t *testing.T) {
+	client := &Client{
+		config: &ChatModelConfig{Model: "test-model"},
+	}
+	tools := []*schema.ToolInfo{{
+		Name: "calculator",
+		Desc: "Do math",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"a": map[string]any{"type": "number"},
+			},
+		},
+	}}
+	req, err := client.genRequest(context.Background(), nil, chat.WithTools(tools))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(req.Tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(req.Tools))
+	}
+	if req.Tools[0].Function.Name != "calculator" {
+		t.Fatalf("expected calculator tool, got %q", req.Tools[0].Function.Name)
+	}
+}
+
+func TestGenerateParsesToolCalls(t *testing.T) {
+	fake := &fakeChatCreator{
+		resp: openai.ChatCompletionResponse{
+			Choices: []openai.ChatCompletionChoice{{
+				Message: openai.ChatCompletionMessage{
+					Role: openai.ChatMessageRoleAssistant,
+					ToolCalls: []openai.ToolCall{{
+						ID:   "call_abc",
+						Type: openai.ToolTypeFunction,
+						Function: openai.FunctionCall{
+							Name:      "calculator",
+							Arguments: `{"a":1,"b":1,"op":"add"}`,
+						},
+					}},
+				},
+			}},
+		},
+	}
+	client := &Client{cli: fake, config: &ChatModelConfig{Model: "test-model"}}
+	msg, err := client.Generate(context.Background(), []*schema.Message{{Role: schema.User, Content: "hi"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msg.ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(msg.ToolCalls))
+	}
+	if msg.ToolCalls[0].ID != "call_abc" || msg.ToolCalls[0].Name != "calculator" {
+		t.Fatalf("unexpected tool call: %+v", msg.ToolCalls[0])
+	}
+}
+
+func TestGenRequestMapsToolMessages(t *testing.T) {
+	client := &Client{config: &ChatModelConfig{Model: "m"}}
+	req, err := client.genRequest(context.Background(), []*schema.Message{
+		{
+			Role: schema.Assistant,
+			ToolCalls: []schema.ToolCall{{
+				ID: "id1", Name: "calculator", Arguments: `{"a":1}`,
+			}},
+		},
+		{Role: schema.Tool, ToolCallID: "id1", Content: "2"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(req.Messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(req.Messages))
+	}
+	if len(req.Messages[0].ToolCalls) != 1 || req.Messages[0].ToolCalls[0].ID != "id1" {
+		t.Fatalf("assistant tool_calls: %+v", req.Messages[0].ToolCalls)
+	}
+	if req.Messages[1].ToolCallID != "id1" || req.Messages[1].Content != "2" {
+		t.Fatalf("tool message: %+v", req.Messages[1])
+	}
 }

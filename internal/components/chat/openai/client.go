@@ -55,7 +55,10 @@ func (c *Client) Generate(ctx context.Context, input []*schema.Message, opts ...
 		return nil, fmt.Errorf("no choices returned from openai API response")
 	}
 
-	message := resp.Choices[0].Message
+	return toSchemaMessage(resp.Choices[0].Message), nil
+}
+
+func toSchemaMessage(message openai.ChatCompletionMessage) *schema.Message {
 	outMessage := &schema.Message{
 		Role:    toSchemaRole(message.Role),
 		Content: message.Content,
@@ -63,8 +66,17 @@ func (c *Client) Generate(ctx context.Context, input []*schema.Message, opts ...
 	if len(message.ReasoningContent) > 0 {
 		outMessage.ReasoningContent = message.ReasoningContent
 	}
-
-	return outMessage, nil
+	if len(message.ToolCalls) > 0 {
+		outMessage.ToolCalls = make([]schema.ToolCall, len(message.ToolCalls))
+		for i, tc := range message.ToolCalls {
+			outMessage.ToolCalls[i] = schema.ToolCall{
+				ID:        tc.ID,
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			}
+		}
+	}
+	return outMessage
 }
 
 func (c *Client) genRequest(ctx context.Context, input []*schema.Message, opts ...chat.Option) (*openai.ChatCompletionRequest, error) {
@@ -83,13 +95,59 @@ func (c *Client) genRequest(ctx context.Context, input []*schema.Message, opts .
 
 	msgs := make([]openai.ChatCompletionMessage, len(input))
 	for i, msg := range input {
-		msgs[i] = openai.ChatCompletionMessage{
-			Role:    toOpenaiRole(msg.Role),
-			Content: msg.Content,
-		}
+		msgs[i] = toOpenaiMessage(msg)
 	}
 	req.Messages = msgs
+
+	if len(options.Tools) > 0 {
+		req.Tools = make([]openai.Tool, len(options.Tools))
+		for i, info := range options.Tools {
+			if info == nil {
+				continue
+			}
+			params := info.Parameters
+			if params == nil {
+				params = map[string]any{"type": "object", "properties": map[string]any{}}
+			}
+			req.Tools[i] = openai.Tool{
+				Type: openai.ToolTypeFunction,
+				Function: &openai.FunctionDefinition{
+					Name:        info.Name,
+					Description: info.Desc,
+					Parameters:  params,
+				},
+			}
+		}
+	}
+
 	return req, nil
+}
+
+func toOpenaiMessage(msg *schema.Message) openai.ChatCompletionMessage {
+	if msg == nil {
+		return openai.ChatCompletionMessage{}
+	}
+	out := openai.ChatCompletionMessage{
+		Role:    toOpenaiRole(msg.Role),
+		Content: msg.Content,
+	}
+	if msg.ToolCallID != "" {
+		out.ToolCallID = msg.ToolCallID
+	}
+	if len(msg.ToolCalls) > 0 {
+		out.ToolCalls = make([]openai.ToolCall, len(msg.ToolCalls))
+		for i, tc := range msg.ToolCalls {
+			out.ToolCalls[i] = openai.ToolCall{
+				ID:   tc.ID,
+				Type: openai.ToolTypeFunction,
+				Function: openai.FunctionCall{
+					Name:      tc.Name,
+					Arguments: tc.Arguments,
+				},
+			}
+		}
+	}
+	return out
 }
 
 func toOpenaiRole(role schema.RoleType) string {
