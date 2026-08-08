@@ -35,7 +35,9 @@ func TestAgentRunWithToolLoop(t *testing.T) {
 					{ID: "call_1", Name: builtin.CalculatorToolName, Arguments: `{"a":2,"b":3,"op":"mul"}`},
 				},
 			},
-			{Role: schema.Assistant, Content: "The answer is 6."},
+			{
+				Role: schema.Assistant, Content: "The answer is 6.",
+			},
 		},
 	}
 
@@ -61,7 +63,7 @@ func TestAgentRunWithToolLoop(t *testing.T) {
 		t.Fatalf("expected 2 model calls, got %d", model.calls)
 	}
 	if len(result.Messages) != 4 {
-		t.Fatalf("expected 4 messages (user, assistant+toolcall, tool, assistant), got %d", len(result.Messages))
+		t.Fatalf("expected 4 messages (user, assistant, tool, assistant), got %d", len(result.Messages))
 	}
 	if result.Messages[2].Role != schema.Tool || result.Messages[2].Content != "6" {
 		t.Fatalf("tool message: %+v", result.Messages[2])
